@@ -14,6 +14,9 @@
             background-color: #55a630; /* Цвет травы */
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
             touch-action: none; /* Отключаем стандартные жесты браузера */
+            -webkit-user-select: none; /* Запрет выделения на iOS */
+            -webkit-touch-callout: none;
+            user-select: none;
         }
 
         #gameCanvas {
@@ -171,14 +174,14 @@
     <div id="start-screen" class="overlay-screen">
         <h1>🐉 Мир Драконов 🐉</h1>
         <p>Используйте два джойстика на экране для игры.<br>Левый джойстик (синий) — стрельба.<br>Правый джойстик (розовый) — движение.</p>
-        <button onclick="startGame()">ИГРАТЬ</button>
+        <button id="btn-start">ИГРАТЬ</button>
     </div>
 
     <!-- Экран поражения -->
     <div id="game-over-screen" class="overlay-screen hidden">
         <h1>Вы пали в бою... 💀</h1>
         <p id="final-score">Вы собрали 0 камней и достигли 1 уровня.</p>
-        <button onclick="resetGame()">ИГРАТЬ СНОВА</button>
+        <button id="btn-restart">ИГРАТЬ СНОВА</button>
     </div>
 
     <script>
@@ -655,8 +658,8 @@
 
         function generateScenery() {
             scenery.length = 0;
-            // Генерируем 2000 объектов декораций случайным образом
-            for (let i = 0; i < 2000; i++) {
+            // Оптимизация для телефонов: уменьшено количество объектов с 2000 до 800
+            for (let i = 0; i < 800; i++) {
                 scenery.push({
                     x: (Math.random() * 2 - 1) * WORLD_SIZE,
                     y: (Math.random() * 2 - 1) * WORLD_SIZE,
@@ -752,6 +755,19 @@
         };
         window.addEventListener('touchend', handleTouchEnd, {passive: false});
         window.addEventListener('touchcancel', handleTouchEnd, {passive: false});
+
+        // Надежная привязка кнопок для мобильных устройств
+        const btnStart = document.getElementById('btn-start');
+        const btnRestart = document.getElementById('btn-restart');
+
+        const startHandler = (e) => { e.preventDefault(); startGame(); };
+        const restartHandler = (e) => { e.preventDefault(); resetGame(); };
+
+        btnStart.addEventListener('touchstart', startHandler, {passive: false});
+        btnStart.addEventListener('click', startHandler);
+        
+        btnRestart.addEventListener('touchstart', restartHandler, {passive: false});
+        btnRestart.addEventListener('click', restartHandler);
 
         // --- ИГРОВОЙ ЦИКЛ ---
 
