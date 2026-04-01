@@ -118,6 +118,64 @@
             text-align: center;
         }
 
+        h3 {
+            font-size: 24px;
+            margin-top: 0;
+            margin-bottom: 10px;
+            text-shadow: 1px 1px 4px black;
+        }
+
+        /* Выбор аватара */
+        .avatar-selection {
+            display: flex;
+            gap: 15px;
+            margin-bottom: 25px;
+            flex-wrap: wrap;
+            justify-content: center;
+        }
+
+        .avatar-card {
+            width: 70px;
+            height: 70px;
+            border: 3px solid rgba(255,255,255,0.5);
+            border-radius: 15px;
+            background: rgba(0,0,0,0.5);
+            cursor: pointer;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-size: 40px;
+            transition: all 0.2s;
+            overflow: hidden;
+            position: relative;
+        }
+
+        .avatar-card img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+
+        .avatar-card.selected {
+            border-color: #ffd700;
+            background: rgba(255, 215, 0, 0.3);
+            box-shadow: 0 0 20px rgba(255, 215, 0, 0.6);
+            transform: scale(1.1);
+        }
+
+        .avatar-label {
+            position: absolute;
+            bottom: 0;
+            font-size: 10px;
+            background: rgba(0,0,0,0.7);
+            width: 100%;
+            text-align: center;
+            padding: 2px 0;
+            font-weight: normal;
+            color: white;
+            line-height: 1.2;
+        }
+
         p {
             font-size: 20px;
             margin-bottom: 30px;
@@ -174,6 +232,12 @@
     <div id="start-screen" class="overlay-screen">
         <h1>🐉 Мир Драконов 🐉</h1>
         <p>Используйте два джойстика на экране для игры.<br>Левый джойстик (синий) — стрельба.<br>Правый джойстик (розовый) — движение.</p>
+        
+        <h3>Выберите своего бойца:</h3>
+        <div class="avatar-selection" id="avatar-selection">
+            <!-- Сюда JS добавит аватары -->
+        </div>
+
         <button id="btn-start">ИГРАТЬ</button>
     </div>
 
@@ -205,6 +269,86 @@
         let lastTime = 0;
         let leftJoy = null;
         let rightJoy = null;
+
+        // --- НАСТРОЙКА АВАТАРОВ (ОЦИФРОВАННЫЕ РИСУНКИ) ---
+        const birdDragonSVG = encodeURIComponent(`
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">
+            <!-- Синие перья -->
+            <path d="M40 20 Q20 30 20 60 L10 50 L20 70 L5 75 L25 85 L15 95 L40 90" fill="#2589bd" stroke="#185a7d" stroke-width="2"/>
+            <!-- Зеленое тело -->
+            <path d="M40 90 C30 60 40 30 60 30 C80 30 85 50 85 70 C85 90 60 95 40 90" fill="#52a788" stroke="#36735e" stroke-width="2"/>
+            <!-- Желтый клюв/хохолок -->
+            <path d="M60 30 C70 10 95 15 95 30 C95 40 75 45 60 45 Z" fill="#f4d35e" stroke="#c0a030" stroke-width="2"/>
+            <!-- Глаз -->
+            <circle cx="65" cy="35" r="4" fill="#333"/>
+        </svg>`);
+
+        const crystalDragonSVG = encodeURIComponent(`
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">
+            <!-- Желтые шипы -->
+            <path d="M40 40 L20 35 L35 45 L15 50 L35 55 L20 65 L40 60" fill="#eadd6e" stroke="#bdae40" stroke-width="2"/>
+            <!-- Синее тело (хвост и лапы) -->
+            <path d="M55 50 C20 60 20 90 40 95 C50 90 55 90 65 95 C75 90 80 70 70 50 Z" fill="#14a0be" stroke="#0e748b" stroke-width="2"/>
+            <!-- Хвост -->
+            <path d="M30 80 Q10 80 5 60 Q15 70 30 75 Z" fill="#52a788" stroke="#36735e" stroke-width="2"/>
+            <!-- Голова -->
+            <circle cx="60" cy="50" r="18" fill="#d2e3c0" stroke="#8fa07a" stroke-width="2"/> 
+            <!-- Красный рот -->
+            <path d="M45 55 C55 65 75 65 80 55 C85 60 75 70 45 65 Z" fill="#ff4d6d" /> 
+            <!-- Глаз -->
+            <circle cx="65" cy="45" r="3" fill="#333"/>
+            <!-- Розовая подставка-корона -->
+            <path d="M53 20 L67 20 L63 35 L57 35 Z" fill="#ff70a6" stroke="#c04070" stroke-width="2"/>
+            <!-- Синий кристалл/снежинка -->
+            <circle cx="60" cy="15" r="10" fill="none" stroke="#00bbf9" stroke-width="4"/>
+            <path d="M60 0 L60 30 M45 15 L75 15 M53 8 L67 22 M53 22 L67 8" stroke="#00bbf9" stroke-width="3" stroke-linecap="round"/>
+        </svg>`);
+
+        const avatars = [
+            { id: 0, name: 'Птице-дракон', type: 'image', src: 'data:image/svg+xml;charset=utf-8,' + birdDragonSVG, imgObj: null },
+            { id: 1, name: 'Кристальный', type: 'image', src: 'data:image/svg+xml;charset=utf-8,' + crystalDragonSVG, imgObj: null },
+            { id: 2, name: 'Классик', type: 'emoji', value: '🐉' },
+            { id: 3, name: 'Ти-Рекс', type: 'emoji', value: '🦖' },
+            { id: 4, name: 'Саламандра', type: 'emoji', value: '🦎' }
+        ];
+        let selectedAvatarId = 0;
+
+        // Предзагрузка изображений
+        avatars.forEach(av => {
+            if (av.type === 'image') {
+                const img = new Image();
+                img.src = av.src;
+                av.imgObj = img;
+            }
+        });
+
+        // Отрисовка меню выбора аватара
+        const avatarSelectionDiv = document.getElementById('avatar-selection');
+        function renderAvatarSelection() {
+            avatarSelectionDiv.innerHTML = '';
+            avatars.forEach(av => {
+                const card = document.createElement('div');
+                card.className = `avatar-card ${av.id === selectedAvatarId ? 'selected' : ''}`;
+                
+                if (av.type === 'image') {
+                    card.innerHTML = `<img src="${av.src}" alt="${av.name}"><div class="avatar-label">${av.name}</div>`;
+                } else {
+                    card.innerHTML = `${av.value}<div class="avatar-label">${av.name}</div>`;
+                }
+
+                // Обработка касаний и кликов для выбора аватара
+                const selectAvatar = (e) => {
+                    e.preventDefault();
+                    selectedAvatarId = av.id;
+                    renderAvatarSelection();
+                };
+                card.addEventListener('mousedown', selectAvatar);
+                card.addEventListener('touchstart', selectAvatar, {passive: false});
+
+                avatarSelectionDiv.appendChild(card);
+            });
+        }
+        renderAvatarSelection();
 
         // Подгоняем канвас под размер окна
         function resizeCanvas() {
@@ -338,10 +482,10 @@
         rightJoy = new Joystick(false, 'rgba(255, 105, 180, 0.5)', 'rgba(255, 160, 122, 0.9)', '#c71585', '#ff4500');
 
         class Player {
-            constructor() {
+            constructor(avatarConfig) {
                 this.x = 0;
                 this.y = 0;
-                this.size = 50; // Размер эмодзи
+                this.size = 50; // Размер
                 this.speed = 300; // Пикселей в секунду
                 this.maxHp = 100;
                 this.hp = 100;
@@ -350,6 +494,9 @@
                 this.xpNeeded = 10;
                 this.gemsCollected = 0;
                 
+                // Настройки аватара
+                this.avatar = avatarConfig;
+
                 // Боевые характеристики
                 this.fireRate = 400; // Ускорили стрельбу для ручного режима
                 this.lastFireTime = 0;
@@ -357,7 +504,6 @@
                 this.damage = 25;
                 this.attackRange = 400; // Радиус поиска врагов
                 
-                this.emoji = '🐉';
                 this.direction = 1; // 1 вправо, -1 влево
             }
 
@@ -463,10 +609,17 @@
                 ctx.save();
                 ctx.translate(canvas.width / 2, canvas.height / 2);
                 ctx.scale(this.direction, 1); // Отражение по горизонтали
-                ctx.font = `${this.size}px Arial`;
-                ctx.textAlign = "center";
-                ctx.textBaseline = "middle";
-                ctx.fillText(this.emoji, 0, 0);
+                
+                if (this.avatar.type === 'emoji') {
+                    ctx.font = `${this.size}px Arial`;
+                    ctx.textAlign = "center";
+                    ctx.textBaseline = "middle";
+                    ctx.fillText(this.avatar.value, 0, 0);
+                } else if (this.avatar.type === 'image' && this.avatar.imgObj) {
+                    const imgSize = this.size * 1.8; // Делаем картинку чуть больше для наглядности
+                    ctx.drawImage(this.avatar.imgObj, -imgSize/2, -imgSize/2, imgSize, imgSize);
+                }
+
                 ctx.restore();
 
                 // Отрисовка радиуса атаки (опционально, для красоты, полупрозрачный)
@@ -775,7 +928,7 @@
             startScreen.classList.add('hidden');
             gameOverScreen.classList.add('hidden');
             
-            player = new Player();
+            player = new Player(avatars[selectedAvatarId]);
             enemies = [];
             projectiles = [];
             gems = [];
