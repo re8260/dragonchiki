@@ -1,0 +1,810 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Мир Драконов</title>
+    <style>
+        body, html {
+            margin: 0;
+            padding: 0;
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            background-color: #55a630; /* Цвет травы */
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            touch-action: none; /* Отключаем стандартные жесты браузера */
+        }
+
+        #gameCanvas {
+            display: block;
+        }
+
+        /* Пользовательский интерфейс */
+        #ui-layer {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none; /* Чтобы клики проходили сквозь UI к канвасу */
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+        }
+
+        .top-bar {
+            padding: 15px;
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            text-shadow: 1px 1px 3px rgba(0,0,0,0.8);
+            color: white;
+        }
+
+        .stats-box {
+            background: rgba(0, 0, 0, 0.5);
+            padding: 10px 20px;
+            border-radius: 12px;
+            border: 2px solid #ffd700;
+        }
+
+        .stat-line {
+            font-size: 20px;
+            font-weight: bold;
+            margin: 5px 0;
+        }
+
+        /* Полоса опыта */
+        .xp-container {
+            width: 50%;
+            background: rgba(0,0,0,0.6);
+            height: 24px;
+            border-radius: 12px;
+            border: 2px solid #fff;
+            position: relative;
+            overflow: hidden;
+            margin: 0 auto;
+        }
+
+        .xp-bar {
+            height: 100%;
+            width: 0%;
+            background: linear-gradient(90deg, #00f2fe 0%, #4facfe 100%);
+            transition: width 0.2s;
+        }
+
+        .xp-text {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            text-align: center;
+            line-height: 24px;
+            font-size: 14px;
+            font-weight: bold;
+        }
+
+        /* Экраны меню и смерти */
+        .overlay-screen {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.7);
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            color: white;
+            pointer-events: auto;
+            z-index: 10;
+        }
+
+        .hidden {
+            display: none !important;
+        }
+
+        h1 {
+            font-size: 48px;
+            color: #ffd700;
+            text-shadow: 0 0 10px #ff8c00;
+            margin-bottom: 10px;
+            text-align: center;
+        }
+
+        p {
+            font-size: 20px;
+            margin-bottom: 30px;
+            text-align: center;
+            max-width: 600px;
+        }
+
+        button {
+            padding: 15px 40px;
+            font-size: 24px;
+            font-weight: bold;
+            color: white;
+            background: linear-gradient(to bottom, #ff8c00, #ff0000);
+            border: 3px solid #ffd700;
+            border-radius: 30px;
+            cursor: pointer;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.5);
+            transition: transform 0.1s, filter 0.2s;
+        }
+
+        button:hover {
+            transform: scale(1.05);
+            filter: brightness(1.2);
+        }
+
+        button:active {
+            transform: scale(0.95);
+        }
+
+    </style>
+</head>
+<body>
+
+    <!-- Игровой холст -->
+    <canvas id="gameCanvas"></canvas>
+
+    <!-- UI Слой -->
+    <div id="ui-layer">
+        <div class="top-bar">
+            <div class="stats-box">
+                <div class="stat-line">❤️ Здоровье: <span id="hp-val">100</span> / <span id="maxhp-val">100</span></div>
+                <div class="stat-line">💎 Камни: <span id="gems-val">0</span></div>
+                <div class="stat-line">⭐ Уровень: <span id="level-val">1</span></div>
+            </div>
+            
+            <div class="xp-container">
+                <div class="xp-bar" id="xp-bar-fill"></div>
+                <div class="xp-text" id="xp-text-val">Опыт: 0 / 10</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Главное меню -->
+    <div id="start-screen" class="overlay-screen">
+        <h1>🐉 Мир Драконов 🐉</h1>
+        <p>Управляйте драконом с помощью мыши, касаний или клавиш WASD.<br>Дракон атакует автоматически.<br>Собирайте камни, чтобы стать сильнее!</p>
+        <button onclick="startGame()">ИГРАТЬ</button>
+    </div>
+
+    <!-- Экран поражения -->
+    <div id="game-over-screen" class="overlay-screen hidden">
+        <h1>Вы пали в бою... 💀</h1>
+        <p id="final-score">Вы собрали 0 камней и достигли 1 уровня.</p>
+        <button onclick="resetGame()">ИГРАТЬ СНОВА</button>
+    </div>
+
+    <script>
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+
+        // UI Элементы
+        const hpVal = document.getElementById('hp-val');
+        const maxhpVal = document.getElementById('maxhp-val');
+        const gemsVal = document.getElementById('gems-val');
+        const levelVal = document.getElementById('level-val');
+        const xpBarFill = document.getElementById('xp-bar-fill');
+        const xpTextVal = document.getElementById('xp-text-val');
+        const startScreen = document.getElementById('start-screen');
+        const gameOverScreen = document.getElementById('game-over-screen');
+        const finalScoreText = document.getElementById('final-score');
+
+        // Подгоняем канвас под размер окна
+        function resizeCanvas() {
+            canvas.width = window.innerWidth;
+            canvas.height = window.innerHeight;
+        }
+        window.addEventListener('resize', resizeCanvas);
+        resizeCanvas();
+
+        // --- ИГРОВЫЕ ПЕРЕМЕННЫЕ ---
+        let gameLoopId;
+        let isPlaying = false;
+        let lastTime = 0;
+
+        // Размер игрового мира (очень большой)
+        const WORLD_SIZE = 4000; 
+
+        // Декорации (Деревья, горы и т.д.)
+        const scenery = [];
+        const sceneryEmojis = ['🌲', '🌳', '🌸', '🍄', '⛰️', '🌿', '🪵'];
+
+        // Игровые объекты
+        let player;
+        let enemies = [];
+        let projectiles = [];
+        let gems = [];
+        let damageTexts = [];
+
+        // Ввод пользователя
+        const keys = { w: false, a: false, s: false, d: false, ArrowUp: false, ArrowLeft: false, ArrowDown: false, ArrowRight: false };
+        let pointer = { x: canvas.width/2, y: canvas.height/2, active: false };
+
+        // --- КЛАССЫ ---
+
+        class Player {
+            constructor() {
+                this.x = 0;
+                this.y = 0;
+                this.size = 50; // Размер эмодзи
+                this.speed = 300; // Пикселей в секунду
+                this.maxHp = 100;
+                this.hp = 100;
+                this.level = 1;
+                this.xp = 0;
+                this.xpNeeded = 10;
+                this.gemsCollected = 0;
+                
+                // Боевые характеристики
+                this.fireRate = 800; // мс между выстрелами
+                this.lastFireTime = 0;
+                this.projectileSpeed = 500;
+                this.damage = 25;
+                this.attackRange = 400; // Радиус поиска врагов
+                
+                this.emoji = '🐉';
+                this.direction = 1; // 1 вправо, -1 влево
+            }
+
+            update(dt) {
+                // Движение с клавиатуры
+                let dx = 0;
+                let dy = 0;
+                
+                if (keys.w || keys.ArrowUp) dy -= 1;
+                if (keys.s || keys.ArrowDown) dy += 1;
+                if (keys.a || keys.ArrowLeft) dx -= 1;
+                if (keys.d || keys.ArrowRight) dx += 1;
+
+                // Движение за мышью/пальцем, если нет ввода с клавиатуры
+                if (dx === 0 && dy === 0 && pointer.active) {
+                    // Рассчитываем вектор от центра экрана (где игрок) до курсора
+                    const targetX = pointer.x - canvas.width / 2;
+                    const targetY = pointer.y - canvas.height / 2;
+                    
+                    // Движемся только если курсор достаточно далеко от центра
+                    if (Math.hypot(targetX, targetY) > 20) {
+                        const angle = Math.atan2(targetY, targetX);
+                        dx = Math.cos(angle);
+                        dy = Math.sin(angle);
+                    }
+                }
+
+                // Нормализация вектора движения (чтобы по диагонали не бегал быстрее)
+                if (dx !== 0 || dy !== 0) {
+                    const length = Math.hypot(dx, dy);
+                    dx /= length;
+                    dy /= length;
+                    
+                    // Поворот дракона
+                    if (dx > 0) this.direction = 1;
+                    if (dx < 0) this.direction = -1;
+                }
+
+                this.x += dx * this.speed * dt;
+                this.y += dy * this.speed * dt;
+
+                // Ограничение карты
+                this.x = Math.max(-WORLD_SIZE, Math.min(WORLD_SIZE, this.x));
+                this.y = Math.max(-WORLD_SIZE, Math.min(WORLD_SIZE, this.y));
+
+                // Авто-атака
+                this.autoAttack(dt);
+            }
+
+            autoAttack(dt) {
+                const now = performance.now();
+                if (now - this.lastFireTime >= this.fireRate) {
+                    // Ищем ближайшего врага
+                    let closestEnemy = null;
+                    let minDistance = this.attackRange;
+
+                    for (let enemy of enemies) {
+                        const dist = Math.hypot(enemy.x - this.x, enemy.y - this.y);
+                        if (dist < minDistance) {
+                            minDistance = dist;
+                            closestEnemy = enemy;
+                        }
+                    }
+
+                    if (closestEnemy) {
+                        // Стреляем!
+                        const angle = Math.atan2(closestEnemy.y - this.y, closestEnemy.x - this.x);
+                        projectiles.push(new Projectile(this.x, this.y, angle, this.damage, this.projectileSpeed));
+                        this.lastFireTime = now;
+                    }
+                }
+            }
+
+            takeDamage(amount) {
+                this.hp -= amount;
+                if (this.hp <= 0) {
+                    this.hp = 0;
+                    endGame();
+                }
+                updateUI();
+            }
+
+            gainXp(amount) {
+                this.xp += amount;
+                this.gemsCollected++;
+                
+                // Лечение при подборе камня
+                this.hp = Math.min(this.maxHp, this.hp + 2);
+
+                if (this.xp >= this.xpNeeded) {
+                    this.levelUp();
+                }
+                updateUI();
+            }
+
+            levelUp() {
+                this.level++;
+                this.xp -= this.xpNeeded;
+                this.xpNeeded = Math.floor(this.xpNeeded * 1.5);
+                
+                // Улучшение характеристик
+                this.maxHp += 20;
+                this.hp = this.maxHp;
+                this.damage += 5;
+                this.fireRate = Math.max(200, this.fireRate - 50); // Ускорение стрельбы
+                
+                // Эффект левел-апа
+                addDamageText("УРОВЕНЬ ПОВЫШЕН!", this.x, this.y - 50, "#ffd700", 30);
+            }
+
+            draw(ctx) {
+                ctx.save();
+                ctx.translate(canvas.width / 2, canvas.height / 2);
+                ctx.scale(this.direction, 1); // Отражение по горизонтали
+                ctx.font = `${this.size}px Arial`;
+                ctx.textAlign = "center";
+                ctx.textBaseline = "middle";
+                ctx.fillText(this.emoji, 0, 0);
+                ctx.restore();
+
+                // Отрисовка радиуса атаки (опционально, для красоты, полупрозрачный)
+                ctx.beginPath();
+                ctx.arc(canvas.width / 2, canvas.height / 2, this.attackRange, 0, Math.PI * 2);
+                ctx.strokeStyle = "rgba(255, 140, 0, 0.1)";
+                ctx.lineWidth = 2;
+                ctx.stroke();
+            }
+        }
+
+        class Enemy {
+            constructor(x, y, type) {
+                this.x = x;
+                this.y = y;
+                this.type = type; // 0: Слизь, 1: Гоблин, 2: Летучая мышь
+                
+                if (type === 0) {
+                    this.emoji = '🦠';
+                    this.speed = 80;
+                    this.hp = 30;
+                    this.damage = 10;
+                    this.size = 35;
+                } else if (type === 1) {
+                    this.emoji = '👺';
+                    this.speed = 120;
+                    this.hp = 50;
+                    this.damage = 15;
+                    this.size = 40;
+                } else {
+                    this.emoji = '🦇';
+                    this.speed = 180;
+                    this.hp = 20;
+                    this.damage = 5;
+                    this.size = 30;
+                }
+                
+                this.maxHp = this.hp;
+                // Анимация покачивания
+                this.wobbleOffset = Math.random() * Math.PI * 2; 
+            }
+
+            update(dt) {
+                // Движение к игроку
+                const angle = Math.atan2(player.y - this.y, player.x - this.x);
+                this.x += Math.cos(angle) * this.speed * dt;
+                this.y += Math.sin(angle) * this.speed * dt;
+
+                // Столкновение с игроком
+                const distToPlayer = Math.hypot(player.x - this.x, player.y - this.y);
+                if (distToPlayer < (this.size + player.size) / 2 - 10) {
+                    player.takeDamage(this.damage);
+                    // Отталкиваем монстра после удара, чтобы не наносил урон каждый кадр
+                    this.x -= Math.cos(angle) * 50;
+                    this.y -= Math.sin(angle) * 50;
+                }
+            }
+
+            takeDamage(amount) {
+                this.hp -= amount;
+                addDamageText(`-${amount}`, this.x, this.y, "#ff3333");
+                
+                if (this.hp <= 0) {
+                    // Смерть и дроп камня
+                    gems.push(new Gem(this.x, this.y));
+                    return true; // Возвращаем true, если умер
+                }
+                return false;
+            }
+
+            draw(ctx, cameraX, cameraY) {
+                const drawX = this.x - cameraX;
+                const drawY = this.y - cameraY;
+                
+                // Добавляем покачивание для живости
+                const wobble = Math.sin(performance.now() / 150 + this.wobbleOffset) * 5;
+
+                ctx.font = `${this.size}px Arial`;
+                ctx.textAlign = "center";
+                ctx.textBaseline = "middle";
+                ctx.fillText(this.emoji, drawX, drawY + wobble);
+
+                // Полоска ХП монстра (если ранен)
+                if (this.hp < this.maxHp) {
+                    const hpPercent = this.hp / this.maxHp;
+                    ctx.fillStyle = "black";
+                    ctx.fillRect(drawX - 20, drawY - this.size/2 - 10, 40, 6);
+                    ctx.fillStyle = "red";
+                    ctx.fillRect(drawX - 20, drawY - this.size/2 - 10, 40 * hpPercent, 6);
+                }
+            }
+        }
+
+        class Projectile {
+            constructor(x, y, angle, damage, speed) {
+                this.x = x;
+                this.y = y;
+                this.vx = Math.cos(angle) * speed;
+                this.vy = Math.sin(angle) * speed;
+                this.damage = damage;
+                this.emoji = '🔥';
+                this.size = 25;
+                this.lifeTime = 2; // секунд
+                this.age = 0;
+            }
+
+            update(dt) {
+                this.x += this.vx * dt;
+                this.y += this.vy * dt;
+                this.age += dt;
+                return this.age >= this.lifeTime; // Возвращает true если снаряд умер
+            }
+
+            draw(ctx, cameraX, cameraY) {
+                const drawX = this.x - cameraX;
+                const drawY = this.y - cameraY;
+                
+                ctx.save();
+                ctx.translate(drawX, drawY);
+                // Вращение снаряда по направлению полета
+                ctx.rotate(Math.atan2(this.vy, this.vx));
+                ctx.font = `${this.size}px Arial`;
+                ctx.textAlign = "center";
+                ctx.textBaseline = "middle";
+                ctx.fillText(this.emoji, 0, 0);
+                ctx.restore();
+            }
+        }
+
+        class Gem {
+            constructor(x, y) {
+                this.x = x + (Math.random() * 20 - 10);
+                this.y = y + (Math.random() * 20 - 10);
+                this.emoji = '💎';
+                this.size = 20;
+                // Эффект появления
+                this.spawnTime = performance.now();
+                this.xpValue = 1 + Math.floor(Math.random() * 3); // Дает от 1 до 3 опыта
+            }
+
+            update(dt) {
+                // Магнит к игроку, если близко
+                const dist = Math.hypot(player.x - this.x, player.y - this.y);
+                if (dist < 150) {
+                    // Чем ближе, тем быстрее летит
+                    const speed = 400 * (1 - dist/150) + 100;
+                    const angle = Math.atan2(player.y - this.y, player.x - this.x);
+                    this.x += Math.cos(angle) * speed * dt;
+                    this.y += Math.sin(angle) * speed * dt;
+                }
+
+                // Подбор камня
+                if (dist < (this.size + player.size) / 2) {
+                    player.gainXp(this.xpValue);
+                    return true; // Подобран
+                }
+                return false;
+            }
+
+            draw(ctx, cameraX, cameraY) {
+                const drawX = this.x - cameraX;
+                const drawY = this.y - cameraY;
+                
+                // Левитация
+                const floatY = Math.sin((performance.now() - this.spawnTime) / 200) * 5;
+
+                ctx.font = `${this.size}px Arial`;
+                ctx.textAlign = "center";
+                ctx.textBaseline = "middle";
+                ctx.fillText(this.emoji, drawX, drawY + floatY);
+            }
+        }
+
+        // Всплывающий текст (урон, повышение уровня)
+        function addDamageText(text, x, y, color = "white", size = 20) {
+            damageTexts.push({
+                text: text,
+                x: x,
+                y: y,
+                color: color,
+                size: size,
+                lifeTime: 1.0, // секунд
+                age: 0,
+                vy: -50 // Летит вверх
+            });
+        }
+
+        // --- ГЕНЕРАЦИЯ МИРА И СПАВН ---
+
+        function generateScenery() {
+            scenery.length = 0;
+            // Генерируем 2000 объектов декораций случайным образом
+            for (let i = 0; i < 2000; i++) {
+                scenery.push({
+                    x: (Math.random() * 2 - 1) * WORLD_SIZE,
+                    y: (Math.random() * 2 - 1) * WORLD_SIZE,
+                    emoji: sceneryEmojis[Math.floor(Math.random() * sceneryEmojis.length)],
+                    size: 40 + Math.random() * 40
+                });
+            }
+        }
+
+        let enemySpawnTimer = 0;
+        let spawnInterval = 1.0; // Спавн раз в секунду
+
+        function spawnEnemies(dt) {
+            enemySpawnTimer += dt;
+            
+            // Уменьшаем интервал спавна со временем (усложнение)
+            spawnInterval = Math.max(0.2, 1.0 - (player.level * 0.05));
+
+            if (enemySpawnTimer >= spawnInterval) {
+                enemySpawnTimer = 0;
+                
+                // Спавним врагов за пределами экрана
+                const angle = Math.random() * Math.PI * 2;
+                const distance = Math.max(canvas.width, canvas.height) / 2 + 100;
+                const spawnX = player.x + Math.cos(angle) * distance;
+                const spawnY = player.y + Math.sin(angle) * distance;
+
+                // Выбор типа врага на основе уровня
+                let type = 0; // Слизь
+                const rand = Math.random();
+                if (player.level > 3 && rand > 0.6) type = 1; // Гоблин
+                if (player.level > 5 && rand > 0.8) type = 2; // Летучая мышь
+
+                enemies.push(new Enemy(spawnX, spawnY, type));
+            }
+        }
+
+        // --- УПРАВЛЕНИЕ И UI ---
+
+        function updateUI() {
+            hpVal.innerText = Math.ceil(player.hp);
+            maxhpVal.innerText = player.maxHp;
+            gemsVal.innerText = player.gemsCollected;
+            levelVal.innerText = player.level;
+            
+            const xpPercent = (player.xp / player.xpNeeded) * 100;
+            xpBarFill.style.width = `${xpPercent}%`;
+            xpTextVal.innerText = `Опыт: ${player.xp} / ${player.xpNeeded}`;
+        }
+
+        // Обработчики клавиатуры
+        window.addEventListener('keydown', (e) => {
+            if (keys.hasOwnProperty(e.key)) keys[e.key] = true;
+        });
+        window.addEventListener('keyup', (e) => {
+            if (keys.hasOwnProperty(e.key)) keys[e.key] = false;
+        });
+
+        // Обработчики мыши/сенсора
+        function handlePointerMove(e) {
+            if (e.touches && e.touches.length > 0) {
+                pointer.x = e.touches[0].clientX;
+                pointer.y = e.touches[0].clientY;
+            } else {
+                pointer.x = e.clientX;
+                pointer.y = e.clientY;
+            }
+        }
+
+        canvas.addEventListener('mousedown', (e) => { pointer.active = true; handlePointerMove(e); });
+        canvas.addEventListener('mousemove', (e) => { if(pointer.active) handlePointerMove(e); });
+        window.addEventListener('mouseup', () => { pointer.active = false; });
+        
+        canvas.addEventListener('touchstart', (e) => { pointer.active = true; handlePointerMove(e); }, {passive: false});
+        canvas.addEventListener('touchmove', (e) => { e.preventDefault(); if(pointer.active) handlePointerMove(e); }, {passive: false});
+        window.addEventListener('touchend', () => { pointer.active = false; });
+
+        // --- ИГРОВОЙ ЦИКЛ ---
+
+        function startGame() {
+            startScreen.classList.add('hidden');
+            gameOverScreen.classList.add('hidden');
+            
+            player = new Player();
+            enemies = [];
+            projectiles = [];
+            gems = [];
+            damageTexts = [];
+            
+            generateScenery();
+            updateUI();
+            
+            isPlaying = true;
+            lastTime = performance.now();
+            gameLoopId = requestAnimationFrame(gameLoop);
+        }
+
+        function resetGame() {
+            startGame();
+        }
+
+        function endGame() {
+            isPlaying = false;
+            finalScoreText.innerText = `Вы собрали ${player.gemsCollected} 💎 и достигли ${player.level} уровня!`;
+            gameOverScreen.classList.remove('hidden');
+        }
+
+        function gameLoop(currentTime) {
+            if (!isPlaying) return;
+
+            const dt = (currentTime - lastTime) / 1000; // Дельта времени в секундах
+            lastTime = currentTime;
+
+            // Ограничиваем dt на случай подвисания вкладки
+            const safeDt = Math.min(dt, 0.1);
+
+            update(safeDt);
+            draw();
+
+            gameLoopId = requestAnimationFrame(gameLoop);
+        }
+
+        function update(dt) {
+            player.update(dt);
+            spawnEnemies(dt);
+
+            // Обновление снарядов и проверка столкновений
+            for (let i = projectiles.length - 1; i >= 0; i--) {
+                const p = projectiles[i];
+                if (p.update(dt)) {
+                    projectiles.splice(i, 1); // Удаляем старые снаряды
+                    continue;
+                }
+
+                // Столкновение снарядов с врагами
+                for (let j = enemies.length - 1; j >= 0; j--) {
+                    const e = enemies[j];
+                    const dist = Math.hypot(p.x - e.x, p.y - e.y);
+                    if (dist < (p.size + e.size) / 2) {
+                        if (e.takeDamage(p.damage)) {
+                            enemies.splice(j, 1); // Враг убит
+                        }
+                        projectiles.splice(i, 1); // Снаряд уничтожен при попадании
+                        break; // Снаряд бьет только одного врага
+                    }
+                }
+            }
+
+            // Обновление врагов
+            for (let i = enemies.length - 1; i >= 0; i--) {
+                enemies[i].update(dt);
+            }
+
+            // Обновление камней (сбор)
+            for (let i = gems.length - 1; i >= 0; i--) {
+                if (gems[i].update(dt)) {
+                    gems.splice(i, 1);
+                }
+            }
+
+            // Обновление всплывающего текста
+            for (let i = damageTexts.length - 1; i >= 0; i--) {
+                const t = damageTexts[i];
+                t.age += dt;
+                t.y += t.vy * dt;
+                if (t.age >= t.lifeTime) {
+                    damageTexts.splice(i, 1);
+                }
+            }
+        }
+
+        function draw() {
+            // Очистка экрана
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            // Камера следит за игроком
+            const cameraX = player.x - canvas.width / 2;
+            const cameraY = player.y - canvas.height / 2;
+
+            // Отрисовка фона (простая сетка на траве)
+            ctx.strokeStyle = "rgba(0,0,0,0.05)";
+            ctx.lineWidth = 2;
+            const gridSize = 100;
+            const offsetX = -(cameraX % gridSize);
+            const offsetY = -(cameraY % gridSize);
+            
+            ctx.beginPath();
+            for (let x = offsetX; x < canvas.width; x += gridSize) {
+                ctx.moveTo(x, 0); ctx.lineTo(x, canvas.height);
+            }
+            for (let y = offsetY; y < canvas.height; y += gridSize) {
+                ctx.moveTo(0, y); ctx.lineTo(canvas.width, y);
+            }
+            ctx.stroke();
+
+            // Отрисовка декораций (только видимые)
+            for (let s of scenery) {
+                // Простая отсечка невидимых объектов (Culling)
+                if (s.x > cameraX - s.size && s.x < cameraX + canvas.width + s.size &&
+                    s.y > cameraY - s.size && s.y < cameraY + canvas.height + s.size) {
+                    
+                    ctx.font = `${s.size}px Arial`;
+                    ctx.textAlign = "center";
+                    ctx.textBaseline = "middle";
+                    ctx.fillText(s.emoji, s.x - cameraX, s.y - cameraY);
+                }
+            }
+
+            // Отрисовка камней
+            for (let g of gems) g.draw(ctx, cameraX, cameraY);
+
+            // Отрисовка врагов
+            for (let e of enemies) e.draw(ctx, cameraX, cameraY);
+
+            // Отрисовка снарядов
+            for (let p of projectiles) p.draw(ctx, cameraX, cameraY);
+
+            // Отрисовка игрока (всегда в центре экрана)
+            player.draw(ctx);
+
+            // Отрисовка всплывающего текста
+            for (let t of damageTexts) {
+                const alpha = Math.max(0, 1 - (t.age / t.lifeTime));
+                ctx.fillStyle = t.color;
+                ctx.globalAlpha = alpha;
+                ctx.font = `bold ${t.size}px Arial`;
+                ctx.textAlign = "center";
+                ctx.textBaseline = "middle";
+                ctx.strokeStyle = "black";
+                ctx.lineWidth = 3;
+                
+                const drawX = t.x - cameraX;
+                const drawY = t.y - cameraY;
+                
+                ctx.strokeText(t.text, drawX, drawY);
+                ctx.fillText(t.text, drawX, drawY);
+            }
+            ctx.globalAlpha = 1.0; // Сброс прозрачности
+        }
+
+        // Первичная отрисовка фона перед стартом
+        ctx.fillStyle = "#55a630";
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        
+    </script>
+</body>
+</html>
